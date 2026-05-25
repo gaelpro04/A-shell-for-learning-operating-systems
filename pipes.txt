@@ -1,0 +1,3 @@
+						close(pipes[0]);
+						close(pipes[1]);
+					close(pipes[1]);

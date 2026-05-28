@@ -7,9 +7,10 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 #define COMM 14
-#define MAX_COMMANDS 10
+#define MAX_COMMANDS 5
 #define QUANTUM 10
 
 typedef struct {
@@ -21,7 +22,7 @@ typedef struct Process {
 	char name[100];
 	int burst;
 	int id;
-	int size;           // bloques de memoria
+	int size;
 	char state[15];     // "new", "ready", "terminated"
 	struct Process *next;
 } Process_t;
@@ -49,11 +50,10 @@ int fcfsFunction(Process_t **head, Bloque_t **memoria);
 Process_t* findShortest(Process_t **head);
 int sjfFunction(Process_t **head, Bloque_t **memoria);
 int rrFunction(Process_t **head, Bloque_t **memoria);
-
 void allocFunction(Process_t **head, int id, char *estrategia, Bloque_t **memoria);
 void freeFunction(Process_t **head, int id, Bloque_t **memoria);
 void mstatusFunction(Bloque_t **memoria);
-void compactFunction(Bloque_t **memoria);
+void compactFunction(Bloque_t **memoria, int memoriaTotal);
 
 char *commands[COMM] = {"mycat", "mycp", "remove", "exitt", "mkprocess", "lsprocess",
                          "fcfs", "sjf", "rr", "alloc", "free", "mstatus", "compact", "my_kill"};
@@ -65,6 +65,10 @@ int main(int argc, char *argv[]) {
 	}
 
 	int memoriaTotal = atoi(argv[1]);
+	if (memoriaTotal <= 0) {
+		printf("Error: el tamaño de memoria debe ser un entero positivo\n");
+		return 1;
+	}
 
 	Bloque_t *memoria = malloc(sizeof(Bloque_t));
 	memoria->direccionBase = 0;
@@ -102,14 +106,25 @@ int main(int argc, char *argv[]) {
 		// --------------------------------------------------------
 		// mkprocess <id> <burst> <size>
 		// --------------------------------------------------------
-		} else if (strcmp(comando, "mkprocess") == 0 && pipe1 != NULL && archivo != NULL) {
+		} else if (strcmp(comando, "mkprocess") == 0) {
 			char *sizeStr = strtok(NULL, " ");
+
+			if (pipe1 == NULL || archivo == NULL || sizeStr == NULL) {
+				printf("Uso: mkprocess <id> <burst> <size>\n");
+				continue;
+			}
+
 			int id    = atoi(pipe1);
 			int burst = atoi(archivo);
-			int size  = (sizeStr != NULL) ? atoi(sizeStr) : 0;
+			int size  = atoi(sizeStr);
 
-			// Validar ID duplicado
-			if (findByID(&head, id) != NULL) {
+			if (id <= 0) {
+				printf("Error: id debe ser un entero positivo\n");
+			} else if (burst <= 0) {
+				printf("Error: burst debe ser un entero positivo\n");
+			} else if (size <= 0) {
+				printf("Error: size debe ser un entero positivo\n");
+			} else if (findByID(&head, id) != NULL) {
 				printf("Error: ya existe un proceso con id %d\n", id);
 			} else {
 				char autoName[20];
@@ -118,24 +133,37 @@ int main(int argc, char *argv[]) {
 			}
 
 		// --------------------------------------------------------
-		// my_kill <id>  — free interno si está en ready
+		// my_kill <id>
 		// --------------------------------------------------------
 		} else if (strcmp(comando, "my_kill") == 0 && archivo != NULL) {
-			int id = atoi(archivo);
-			Process_t *proc = findByID(&head, id);
-			if (proc == NULL) {
-				printf("Process %d not found\n", id);
-			} else {
-				// Si está en ready, liberarlo de memoria primero
-				if (strcmp(proc->state, "ready") == 0) {
-					freeFunction(&head, id, &memoria);
-				}
-				Process_t *killed = deleteByID(&head, id);
-				if (killed != NULL) {
-					printf("Process %d (%s) removed\n", killed->id, killed->name);
-					free(killed);
+			// Validar que el argumento sea numérico
+			int esNumero = 1;
+			for (int i = 0; archivo[i] != '\0'; i++) {
+				if (!isdigit((unsigned char)archivo[i]) && !(i == 0 && archivo[i] == '-')) {
+					esNumero = 0;
+					break;
 				}
 			}
+			if (!esNumero) {
+				printf("Error: id debe ser un entero\n");
+			} else {
+				int id = atoi(archivo);
+				Process_t *proc = findByID(&head, id);
+				if (proc == NULL) {
+					printf("Process %d not found\n", id);
+				} else {
+					if (strcmp(proc->state, "ready") == 0)
+						freeFunction(&head, id, &memoria);
+					Process_t *killed = deleteByID(&head, id);
+					if (killed != NULL) {
+						printf("Process %d (%s) removed\n", killed->id, killed->name);
+						free(killed);
+					}
+				}
+			}
+
+		} else if (strcmp(comando, "my_kill") == 0 && archivo == NULL) {
+			printf("Uso: my_kill <id>\n");
 
 		} else if (strcmp(comando, "lsprocess") == 0) {
 			lstProcessFunction(&head);
@@ -149,19 +177,27 @@ int main(int argc, char *argv[]) {
 		} else if (strcmp(comando, "rr") == 0) {
 			rrFunction(&head, &memoria);
 
-		} else if (strcmp(comando, "alloc") == 0 && pipe1 != NULL && archivo != NULL) {
-			int id = atoi(pipe1);
-			allocFunction(&head, id, archivo, &memoria);
+		} else if (strcmp(comando, "alloc") == 0) {
+			if (pipe1 == NULL || archivo == NULL) {
+				printf("Uso: alloc <id> <estrategia>\n");
+			} else {
+				int id = atoi(pipe1);
+				allocFunction(&head, id, archivo, &memoria);
+			}
 
-		} else if (strcmp(comando, "free") == 0 && archivo != NULL) {
-			int id = atoi(archivo);
-			freeFunction(&head, id, &memoria);
+		} else if (strcmp(comando, "free") == 0) {
+			if (archivo == NULL) {
+				printf("Uso: free <id>\n");
+			} else {
+				int id = atoi(archivo);
+				freeFunction(&head, id, &memoria);
+			}
 
 		} else if (strcmp(comando, "mstatus") == 0) {
 			mstatusFunction(&memoria);
 
 		} else if (strcmp(comando, "compact") == 0) {
-			compactFunction(&memoria);
+			compactFunction(&memoria, memoriaTotal);
 
 		} else if (strcmp(comando, "mycat") == 0 && archivo != NULL) {
 			if (pipe1 != NULL && strcmp(pipe1, ">") == 0)
@@ -176,7 +212,7 @@ int main(int argc, char *argv[]) {
 			if (rmFunction(archivo) == -1) printf("Error\n");
 
 		} else if (contains(comando, commands)) {
-			// Comandos bash con soporte de pipes
+			// Comandos bash con soporte de pipes (máximo 5)
 			char *elements[MAX_COMMANDS];
 			char *element = strtok(opcionTemp, "|");
 			int numElements = 0;
@@ -184,6 +220,12 @@ int main(int argc, char *argv[]) {
 				elements[numElements] = element;
 				++numElements;
 				element = strtok(NULL, "|");
+			}
+
+			// Verificar si hay más comandos de los permitidos
+			if (element != NULL) {
+				printf("Error: maximo %d comandos en pipe\n", MAX_COMMANDS);
+				continue;
 			}
 
 			Command command[MAX_COMMANDS];
@@ -303,7 +345,7 @@ void lstProcessFunction(Process_t **head) {
 }
 
 // ============================================================
-// ALGORITMOS — reciben memoria para liberar al terminar
+// ALGORITMOS
 // ============================================================
 
 int fcfsFunction(Process_t **head, Bloque_t **memoria) {
@@ -340,7 +382,6 @@ int fcfsFunction(Process_t **head, Bloque_t **memoria) {
 		turnaround[idx] = acum;
 		printf("[%d] sale %s\n", acum, cur->name);
 
-		// Marcar terminated y liberar memoria
 		Process_t *orig = findByID(head, cur->id);
 		if (orig != NULL) {
 			strcpy(orig->state, "terminated");
@@ -398,7 +439,6 @@ int sjfFunction(Process_t **head, Bloque_t **memoria) {
 		turnaround[idx] = acum;
 		printf("[%d] sale %s\n", acum, node->name);
 
-		// Marcar terminated y liberar memoria
 		strcpy(node->state, "terminated");
 		freeFunction(head, node->id, memoria);
 		idx++;
@@ -459,13 +499,13 @@ int rrFunction(Process_t **head, Bloque_t **memoria) {
 
 			for (int i = 0; i < n; i++) {
 				if (original_ids[i] == current->id) {
-					waiting[idx] = acum - original_burst[i];
+					// Fórmula correcta: waiting = turnaround - burst_original
+					waiting[idx] = turnaround[idx] - original_burst[i];
 					current->burst = original_burst[i];
 					break;
 				}
 			}
 
-			// Marcar terminated y liberar memoria
 			Process_t *orig = findByID(head, current->id);
 			if (orig != NULL) {
 				strcpy(orig->state, "terminated");
@@ -519,11 +559,21 @@ void allocFunction(Process_t **head, int id, char *estrategia, Bloque_t **memori
 		printf("Process %d is not in new state\n", id);
 		return;
 	}
+	if (proc->size <= 0) {
+		printf("Process %d has invalid size (%d), cannot allocate\n", id, proc->size);
+		return;
+	}
+
+	// Convertir estrategia a minúsculas para ser case-insensitive
+	char est[20];
+	strncpy(est, estrategia, sizeof(est) - 1);
+	est[sizeof(est) - 1] = '\0';
+	for (int i = 0; est[i]; i++) est[i] = tolower((unsigned char)est[i]);
 
 	int tamano = proc->size;
 	Bloque_t *bloque = NULL;
 
-	if (strcmp(estrategia, "firstfit") == 0) {
+	if (strcmp(est, "firstfit") == 0) {
 		Bloque_t *actual = *memoria;
 		while (actual != NULL) {
 			if (!actual->estado && actual->tamano >= tamano) {
@@ -532,22 +582,20 @@ void allocFunction(Process_t **head, int id, char *estrategia, Bloque_t **memori
 			}
 			actual = actual->siguiente;
 		}
-	} else if (strcmp(estrategia, "worstfit") == 0) {
+	} else if (strcmp(est, "worstfit") == 0) {
 		Bloque_t *actual = *memoria;
 		while (actual != NULL) {
-			if (!actual->estado && actual->tamano >= tamano) {
+			if (!actual->estado && actual->tamano >= tamano)
 				if (bloque == NULL || actual->tamano > bloque->tamano)
 					bloque = actual;
-			}
 			actual = actual->siguiente;
 		}
-	} else if (strcmp(estrategia, "bestfit") == 0) {
+	} else if (strcmp(est, "bestfit") == 0) {
 		Bloque_t *actual = *memoria;
 		while (actual != NULL) {
-			if (!actual->estado && actual->tamano >= tamano) {
+			if (!actual->estado && actual->tamano >= tamano)
 				if (bloque == NULL || actual->tamano < bloque->tamano)
 					bloque = actual;
-			}
 			actual = actual->siguiente;
 		}
 	} else {
@@ -555,7 +603,10 @@ void allocFunction(Process_t **head, int id, char *estrategia, Bloque_t **memori
 		return;
 	}
 
-	if (bloque == NULL) { printf("No hay espacio disponible\n"); return; }
+	if (bloque == NULL) {
+		printf("No hay espacio disponible para proceso %d (size: %d)\n", id, tamano);
+		return;
+	}
 
 	int sobrante = bloque->tamano - tamano;
 	if (sobrante > 0) {
@@ -576,16 +627,21 @@ void allocFunction(Process_t **head, int id, char *estrategia, Bloque_t **memori
 }
 
 void freeFunction(Process_t **head, int id, Bloque_t **memoria) {
+	// Validar que el proceso existe
+	Process_t *proc = findByID(head, id);
+	if (proc == NULL) { printf("Process %d not found\n", id); return; }
+
+	if (strcmp(proc->state, "terminated") == 0) {
+		printf("Process %d already terminated and not in memory\n", id);
+		return;
+	}
+
 	Bloque_t *actual = *memoria;
 	while (actual != NULL) {
 		if (actual->estado && actual->procesoAlojado != NULL &&
 		    actual->procesoAlojado->id == id) {
-
-			// Solo regresar a "new" si no está terminated
-			if (strcmp(actual->procesoAlojado->state, "terminated") != 0) {
+			if (strcmp(actual->procesoAlojado->state, "terminated") != 0)
 				strcpy(actual->procesoAlojado->state, "new");
-			}
-
 			actual->estado = false;
 			actual->procesoAlojado = NULL;
 			printf("Process %d freed from memory\n", id);
@@ -613,18 +669,55 @@ void mstatusFunction(Bloque_t **memoria) {
 	printf("~~~~~~~~~~~~~~~~~~~~~\n");
 }
 
-void compactFunction(Bloque_t **memoria) {
+void compactFunction(Bloque_t **memoria, int memoriaTotal) {
+	// Reasignar direcciones base solo a bloques ocupados
+	int direccion = 0;
 	Bloque_t *actual = *memoria;
-	while (actual != NULL && actual->siguiente != NULL) {
-		if (!actual->estado && !actual->siguiente->estado) {
-			actual->tamano += actual->siguiente->tamano;
-			Bloque_t *temp = actual->siguiente;
-			actual->siguiente = actual->siguiente->siguiente;
+	while (actual != NULL) {
+		if (actual->estado) {
+			actual->direccionBase = direccion;
+			direccion += actual->tamano;
+		}
+		actual = actual->siguiente;
+	}
+
+	// Eliminar todos los bloques libres de la lista
+	Bloque_t **ptr = memoria;
+	while (*ptr != NULL) {
+		if (!(*ptr)->estado) {
+			Bloque_t *temp = *ptr;
+			*ptr = (*ptr)->siguiente;
 			free(temp);
 		} else {
-			actual = actual->siguiente;
+			ptr = &(*ptr)->siguiente;
 		}
 	}
+
+	// Calcular memoria usada y ubicar el último bloque
+	int memoriaUsada = 0;
+	actual = *memoria;
+	Bloque_t *ultimo = NULL;
+	while (actual != NULL) {
+		memoriaUsada += actual->tamano;
+		ultimo = actual;
+		actual = actual->siguiente;
+	}
+
+	// Agregar un único bloque libre al final con toda la memoria disponible
+	int libreRestante = memoriaTotal - memoriaUsada;
+	if (libreRestante > 0) {
+		Bloque_t *libre = malloc(sizeof(Bloque_t));
+		libre->direccionBase = memoriaUsada;
+		libre->tamano = libreRestante;
+		libre->estado = false;
+		libre->procesoAlojado = NULL;
+		libre->siguiente = NULL;
+		if (ultimo != NULL)
+			ultimo->siguiente = libre;
+		else
+			*memoria = libre;
+	}
+
 	printf("Memory compacted\n");
 }
 

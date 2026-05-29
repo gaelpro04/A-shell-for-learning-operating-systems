@@ -86,28 +86,37 @@ int main(int argc, char *argv[]) {
 	while (1) {
 		printf(">");
 		fgets(opcion, sizeof(opcion), stdin);
-		char opcionTemp[100];
-		strcpy(opcionTemp, opcion);
+		
 		opcion[strcspn(opcion, "\n")] = '\0';
-		comando = strtok(opcion, " ");
+		
+		char opcionTemp[100];          // <-- declarar aquí
+    	strcpy(opcionTemp, opcion); 
 
-		if (comando == NULL) continue;
+		char *args[10];
+		int argc_cmd = 0;
 
-		pipe1 = strtok(NULL, " ");
-		archivo = strtok(NULL, " ");
+		char *token = strtok(opcion, " ");
 
-		if (archivo == NULL) {
-			archivo = pipe1;
+		while (token != NULL && argc_cmd < 10) {
+			args[argc_cmd++] = token;
+			token = strtok(NULL, " ");
 		}
 
-		if (strcmp(comando, "exitt") == 0) {
+		if (argc_cmd == 0) continue;
+
+		char *comando = args[0];
+
+		char *pipe1 = (argc_cmd > 1) ? args[1] : NULL;
+		char *archivo = (argc_cmd > 2) ? args[2] : NULL;
+
+		if (strcmp(comando, "exit") == 0) {
 			break;
 
 		// --------------------------------------------------------
 		// mkprocess <id> <burst> <size>
 		// --------------------------------------------------------
 		} else if (strcmp(comando, "mkprocess") == 0) {
-			char *sizeStr = strtok(NULL, " ");
+			char *sizeStr = (argc_cmd > 3) ? args[3] : NULL;
 
 			if (pipe1 == NULL || archivo == NULL || sizeStr == NULL) {
 				printf("Uso: mkprocess <id> <burst> <size>\n");
@@ -135,11 +144,11 @@ int main(int argc, char *argv[]) {
 		// --------------------------------------------------------
 		// my_kill <id>
 		// --------------------------------------------------------
-		} else if (strcmp(comando, "my_kill") == 0 && archivo != NULL) {
+		} else if (strcmp(comando, "my_kill") == 0 && pipe1 != NULL) {
 			// Validar que el argumento sea numérico
 			int esNumero = 1;
-			for (int i = 0; archivo[i] != '\0'; i++) {
-				if (!isdigit((unsigned char)archivo[i]) && !(i == 0 && archivo[i] == '-')) {
+			for (int i = 0; pipe1[i] != '\0'; i++) {
+				if (!isdigit((unsigned char)pipe1[i]) && !(i == 0 && pipe1[i] == '-')) {
 					esNumero = 0;
 					break;
 				}
@@ -147,7 +156,7 @@ int main(int argc, char *argv[]) {
 			if (!esNumero) {
 				printf("Error: id debe ser un entero\n");
 			} else {
-				int id = atoi(archivo);
+				int id = atoi(pipe1);
 				Process_t *proc = findByID(&head, id);
 				if (proc == NULL) {
 					printf("Process %d not found\n", id);
@@ -162,7 +171,7 @@ int main(int argc, char *argv[]) {
 				}
 			}
 
-		} else if (strcmp(comando, "my_kill") == 0 && archivo == NULL) {
+		} else if (strcmp(comando, "my_kill") == 0 && pipe1 == NULL) {
 			printf("Uso: my_kill <id>\n");
 
 		} else if (strcmp(comando, "lsprocess") == 0) {
@@ -186,10 +195,10 @@ int main(int argc, char *argv[]) {
 			}
 
 		} else if (strcmp(comando, "free") == 0) {
-			if (archivo == NULL) {
+			if (pipe1 == NULL) {
 				printf("Uso: free <id>\n");
 			} else {
-				int id = atoi(archivo);
+				int id = atoi(pipe1);
 				freeFunction(&head, id, &memoria);
 			}
 
@@ -199,17 +208,17 @@ int main(int argc, char *argv[]) {
 		} else if (strcmp(comando, "compact") == 0) {
 			compactFunction(&memoria, memoriaTotal);
 
-		} else if (strcmp(comando, "mycat") == 0 && archivo != NULL) {
-			if (pipe1 != NULL && strcmp(pipe1, ">") == 0)
+		} else if (strcmp(comando, "mycat") == 0 && pipe1 != NULL) {
+			if (strcmp(pipe1, ">") == 0 && archivo != NULL)
 				catFunction(archivo, 0);
 			else
-				catFunction(archivo, 1);
+				catFunction(pipe1, 1);
 
 		} else if (strcmp(comando, "mycp") == 0 && archivo != NULL) {
 			if (cpFunction(pipe1, archivo) == -1) printf("Error\n");
 
-		} else if (strcmp(comando, "remove") == 0 && archivo != NULL) {
-			if (rmFunction(archivo) == -1) printf("Error\n");
+		} else if (strcmp(comando, "remove") == 0 && pipe1 != NULL) {
+			if (rmFunction(pipe1) == -1) printf("Error\n");
 
 		} else if (contains(comando, commands)) {
 			// Comandos bash con soporte de pipes (máximo 5)
@@ -226,14 +235,6 @@ int main(int argc, char *argv[]) {
 			if (element != NULL) {
 				printf("Error: maximo %d comandos en pipe\n", MAX_COMMANDS);
 				continue;
-			}
-
-			Command command[MAX_COMMANDS];
-			for (int i = 0; i < numElements; ++i) {
-				command[i].command = strtok(elements[i], " ");
-				command[i].arg = strtok(NULL, " ");
-				if (command[i].arg != NULL)
-					command[i].arg[strcspn(command[i].arg, "\n")] = '\0';
 			}
 
 			int prev_fd = -1;
@@ -256,8 +257,21 @@ int main(int argc, char *argv[]) {
 						dup2(pipes[1], STDOUT_FILENO);
 						close(pipes[1]);
 					}
-					char *comTemp[] = {command[i].command, command[i].arg, NULL};
-					execvp(comTemp[0], comTemp);
+
+					char segmento[100];                      // <-- copia local
+					strncpy(segmento, elements[i], 99);
+					segmento[99] = '\0';
+
+					char *args_exec[10];
+					int n_args = 0;
+					char *tok = strtok(segmento, " \t\n");   // <-- tokeniza la copia
+					while (tok != NULL && n_args < 9) {
+						args_exec[n_args++] = tok;
+						tok = strtok(NULL, " \t\n");
+					}
+					args_exec[n_args] = NULL;
+
+					execvp(args_exec[0], args_exec);
 					exit(1);
 				}
 				if (prev_fd != -1) close(prev_fd);
@@ -335,13 +349,18 @@ int getLastID(Process_t **head) {
 }
 
 void lstProcessFunction(Process_t **head) {
-	if (*head == NULL) { printf("Empty list\n"); return; }
-	Process_t *rec = *head;
-	printf("ID | NAME | BURST | SIZE | STATE\n");
-	while (rec != NULL) {
-		printf("%d %s %d %d %s\n", rec->id, rec->name, rec->burst, rec->size, rec->state);
-		rec = rec->next;
-	}
+    if (*head == NULL) { printf("Empty list\n"); return; }
+    Process_t *rec = *head;
+    printf("ID | NAME | BURST | BLOCKS | STATE\n");
+    while (rec != NULL) {
+        printf("%d %s %d %d %s\n",
+            rec->id,
+            rec->name,
+            rec->burst,
+            rec->size,   
+            rec->state);
+        rec = rec->next;
+    }
 }
 
 // ============================================================

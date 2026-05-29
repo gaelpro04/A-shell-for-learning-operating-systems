@@ -221,7 +221,6 @@ int main(int argc, char *argv[]) {
 			if (rmFunction(pipe1) == -1) printf("Error\n");
 
 		} else if (contains(comando, commands)) {
-			// Comandos bash con soporte de pipes (máximo 5)
 			char *elements[MAX_COMMANDS];
 			char *element = strtok(opcionTemp, "|");
 			int numElements = 0;
@@ -272,7 +271,9 @@ int main(int argc, char *argv[]) {
 					args_exec[n_args] = NULL;
 
 					execvp(args_exec[0], args_exec);
-					exit(1);
+					char *args_tem[] = {"bash", "-c", args_exec[0], NULL};
+					execvp("bash", args_tem);
+					exit(127);
 				}
 				if (prev_fd != -1) close(prev_fd);
 				if (i < numElements - 1) {

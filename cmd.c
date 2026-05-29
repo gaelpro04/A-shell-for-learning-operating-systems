@@ -55,7 +55,7 @@ void freeFunction(Process_t **head, int id, Bloque_t **memoria);
 void mstatusFunction(Bloque_t **memoria);
 void compactFunction(Bloque_t **memoria, int memoriaTotal);
 
-char *commands[COMM] = {"mycat", "mycp", "remove", "exitt", "mkprocess", "lsprocess",
+char *commands[COMM] = {"mycat", "mycp", "remove", "exit", "mkprocess", "lsprocess",
                          "fcfs", "sjf", "rr", "alloc", "free", "mstatus", "compact", "my_kill"};
 
 int main(int argc, char *argv[]) {
@@ -257,13 +257,13 @@ int main(int argc, char *argv[]) {
 						close(pipes[1]);
 					}
 
-					char segmento[100];                      // <-- copia local
+					char segmento[100];                    
 					strncpy(segmento, elements[i], 99);
 					segmento[99] = '\0';
 
 					char *args_exec[10];
 					int n_args = 0;
-					char *tok = strtok(segmento, " \t\n");   // <-- tokeniza la copia
+					char *tok = strtok(segmento, " \t\n");   
 					while (tok != NULL && n_args < 9) {
 						args_exec[n_args++] = tok;
 						tok = strtok(NULL, " \t\n");
@@ -404,8 +404,9 @@ int fcfsFunction(Process_t **head, Bloque_t **memoria) {
 
 		Process_t *orig = findByID(head, cur->id);
 		if (orig != NULL) {
-			strcpy(orig->state, "terminated");
+			
 			freeFunction(head, orig->id, memoria);
+			strcpy(orig->state, "terminated");
 		}
 
 		idx++;
@@ -459,8 +460,8 @@ int sjfFunction(Process_t **head, Bloque_t **memoria) {
 		turnaround[idx] = acum;
 		printf("[%d] sale %s\n", acum, node->name);
 
-		strcpy(node->state, "terminated");
 		freeFunction(head, node->id, memoria);
+		strcpy(node->state, "terminated");
 		idx++;
 	}
 
@@ -528,8 +529,8 @@ int rrFunction(Process_t **head, Bloque_t **memoria) {
 
 			Process_t *orig = findByID(head, current->id);
 			if (orig != NULL) {
-				strcpy(orig->state, "terminated");
 				freeFunction(head, orig->id, memoria);
+				strcpy(orig->state, "terminated");
 			}
 
 			list[idx] = current;

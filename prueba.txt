@@ -1,0 +1,7 @@
+hola que tal esto es un ejempl ode mi proyecte final
+aqui soalmente
+hago que se ejecute
+el comando mycat qeu signififca que implemente yo
+mi propio cat en vez de usar e;
+de 
+shell

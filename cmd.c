@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <ctype.h>
 
-#define COMM 14
+#define COMM 15
 #define MAX_COMMANDS 5
 #define QUANTUM 10
 
@@ -56,7 +56,7 @@ void mstatusFunction(Bloque_t **memoria);
 void compactFunction(Bloque_t **memoria, int memoriaTotal);
 
 char *commands[COMM] = {"mycat", "mycp", "remove", "exit", "mkprocess", "lsprocess",
-                         "fcfs", "sjf", "rr", "alloc", "free", "mstatus", "compact", "my_kill"};
+                         "fcfs", "sjf", "rr", "alloc", "free", "mstatus", "compact", "my_kill", "cd"};
 
 int main(int argc, char *argv[]) {
 	if (argc != 2) {
@@ -84,12 +84,12 @@ int main(int argc, char *argv[]) {
 	Process_t *head = NULL;
 
 	while (1) {
-		printf(">");
+		printf("GOD_shell> ");
 		fgets(opcion, sizeof(opcion), stdin);
 		
 		opcion[strcspn(opcion, "\n")] = '\0';
 		
-		char opcionTemp[100];          // <-- declarar aquí
+		char opcionTemp[100];       
     	strcpy(opcionTemp, opcion); 
 
 		char *args[10];
@@ -141,11 +141,8 @@ int main(int argc, char *argv[]) {
 				mkProcessFunction(autoName, burst, size, id, &head);
 			}
 
-		// --------------------------------------------------------
 		// my_kill <id>
-		// --------------------------------------------------------
 		} else if (strcmp(comando, "my_kill") == 0 && pipe1 != NULL) {
-			// Validar que el argumento sea numérico
 			int esNumero = 1;
 			for (int i = 0; pipe1[i] != '\0'; i++) {
 				if (!isdigit((unsigned char)pipe1[i]) && !(i == 0 && pipe1[i] == '-')) {
@@ -220,6 +217,12 @@ int main(int argc, char *argv[]) {
 		} else if (strcmp(comando, "remove") == 0 && pipe1 != NULL) {
 			if (rmFunction(pipe1) == -1) printf("Error\n");
 
+		} else if (strcmp(comando, "cd") == 0) {
+			if (pipe1 == NULL) {
+				printf("Use: cd <directory>\n");
+			} else if (chdir(pipe1) != 0) {
+				perror("Error changing directory");
+			}
 		} else if (contains(comando, commands)) {
 			char *elements[MAX_COMMANDS];
 			char *element = strtok(opcionTemp, "|");
@@ -520,7 +523,6 @@ int rrFunction(Process_t **head, Bloque_t **memoria) {
 
 			for (int i = 0; i < n; i++) {
 				if (original_ids[i] == current->id) {
-					// Fórmula correcta: waiting = turnaround - burst_original
 					waiting[idx] = turnaround[idx] - original_burst[i];
 					current->burst = original_burst[i];
 					break;
@@ -584,8 +586,6 @@ void allocFunction(Process_t **head, int id, char *estrategia, Bloque_t **memori
 		printf("Process %d has invalid size (%d), cannot allocate\n", id, proc->size);
 		return;
 	}
-
-	// Convertir estrategia a minúsculas para ser case-insensitive
 	char est[20];
 	strncpy(est, estrategia, sizeof(est) - 1);
 	est[sizeof(est) - 1] = '\0';
@@ -648,7 +648,6 @@ void allocFunction(Process_t **head, int id, char *estrategia, Bloque_t **memori
 }
 
 void freeFunction(Process_t **head, int id, Bloque_t **memoria) {
-	// Validar que el proceso existe
 	Process_t *proc = findByID(head, id);
 	if (proc == NULL) { printf("Process %d not found\n", id); return; }
 
@@ -691,7 +690,6 @@ void mstatusFunction(Bloque_t **memoria) {
 }
 
 void compactFunction(Bloque_t **memoria, int memoriaTotal) {
-	// Reasignar direcciones base solo a bloques ocupados
 	int direccion = 0;
 	Bloque_t *actual = *memoria;
 	while (actual != NULL) {
@@ -702,7 +700,6 @@ void compactFunction(Bloque_t **memoria, int memoriaTotal) {
 		actual = actual->siguiente;
 	}
 
-	// Eliminar todos los bloques libres de la lista
 	Bloque_t **ptr = memoria;
 	while (*ptr != NULL) {
 		if (!(*ptr)->estado) {
@@ -714,7 +711,6 @@ void compactFunction(Bloque_t **memoria, int memoriaTotal) {
 		}
 	}
 
-	// Calcular memoria usada y ubicar el último bloque
 	int memoriaUsada = 0;
 	actual = *memoria;
 	Bloque_t *ultimo = NULL;
@@ -724,7 +720,6 @@ void compactFunction(Bloque_t **memoria, int memoriaTotal) {
 		actual = actual->siguiente;
 	}
 
-	// Agregar un único bloque libre al final con toda la memoria disponible
 	int libreRestante = memoriaTotal - memoriaUsada;
 	if (libreRestante > 0) {
 		Bloque_t *libre = malloc(sizeof(Bloque_t));
